@@ -7,7 +7,7 @@ from services.spacy_service import (
     get_summary,
 )
 
-from services.free_dictionary import summarize
+from services.dictionary import summarize
 
 
 # ==========================================================
