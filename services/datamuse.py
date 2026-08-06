@@ -2,40 +2,28 @@
 ==========================================================
 Datamuse Service
 ----------------------------------------------------------
+Wrapper around the Datamuse API.
 
-https://api.datamuse.com/
+Documentation:
+https://www.datamuse.com/api/
 
-Provides word relationship information.
-
-Features
----------
-✓ Similar Meaning
-✓ Synonyms
-✓ Antonyms
-✓ Rhymes
-✓ Near Rhymes
-✓ Sounds Like
-✓ Spelled Like
-✓ Trigger Words
-✓ Frequently Follows
-✓ Frequently Precedes
-✓ Adjectives
-✓ Nouns
+No API key required until Jan 2027.
 ==========================================================
 """
 
+from typing import List, Dict
 import requests
-import streamlit as st
 
-BASE_URL = "https://api.datamuse.com/words"
+BASE_URL = "https://api.datamuse.com"
+
+TIMEOUT = 15
 
 
-# ----------------------------------------------------------
-# Request Helper
-# ----------------------------------------------------------
+# ==========================================================
+# INTERNAL REQUEST
+# ==========================================================
 
-@st.cache_data(show_spinner=False)
-def _query(params):
+def _query(params: Dict) -> List[Dict]:
     """
     Execute a Datamuse query.
     """
@@ -43,218 +31,330 @@ def _query(params):
     try:
 
         response = requests.get(
-            BASE_URL,
+            f"{BASE_URL}/words",
             params=params,
-            timeout=10
+            timeout=TIMEOUT
         )
 
         response.raise_for_status()
 
         return response.json()
 
-    except requests.RequestException:
+    except Exception:
 
         return []
 
 
-# ----------------------------------------------------------
-# Similar Meaning
-# ----------------------------------------------------------
+# ==========================================================
+# AUTOCOMPLETE
+# ==========================================================
 
-def get_similar(word, max_results=20):
+def autocomplete(prefix: str, max_results: int = 10):
 
-    return _query({
-        "ml": word,
-        "max": max_results
-    })
+    try:
+
+        response = requests.get(
+            f"{BASE_URL}/sug",
+            params={
+                "s": prefix,
+                "max": max_results
+            },
+            timeout=TIMEOUT
+        )
+
+        response.raise_for_status()
+
+        return response.json()
+
+    except Exception:
+
+        return []
 
 
-# ----------------------------------------------------------
-# Synonyms
-# ----------------------------------------------------------
+# ==========================================================
+# SYNONYMS
+# ==========================================================
 
-def get_synonyms(word, max_results=20):
+def synonyms(word: str, limit: int = 20):
 
     return _query({
         "rel_syn": word,
-        "max": max_results
+        "max": limit,
+        "md": "psrf"
     })
 
 
-# ----------------------------------------------------------
-# Antonyms
-# ----------------------------------------------------------
+# ==========================================================
+# ANTONYMS
+# ==========================================================
 
-def get_antonyms(word, max_results=20):
+def antonyms(word: str, limit: int = 20):
 
     return _query({
         "rel_ant": word,
-        "max": max_results
+        "max": limit,
+        "md": "psrf"
     })
 
 
-# ----------------------------------------------------------
-# Rhymes
-# ----------------------------------------------------------
+# ==========================================================
+# MEANS LIKE
+# ==========================================================
 
-def get_rhymes(word, max_results=20):
+def meaning(word: str, limit: int = 20):
 
     return _query({
-        "rel_rhy": word,
-        "max": max_results
+        "ml": word,
+        "max": limit,
+        "md": "psrf"
     })
 
 
-# ----------------------------------------------------------
-# Near Rhymes
-# ----------------------------------------------------------
+# ==========================================================
+# SOUNDS LIKE
+# ==========================================================
 
-def get_near_rhymes(word, max_results=20):
-
-    return _query({
-        "rel_nry": word,
-        "max": max_results
-    })
-
-
-# ----------------------------------------------------------
-# Sounds Like
-# ----------------------------------------------------------
-
-def get_sounds_like(word, max_results=20):
+def sounds_like(word: str, limit: int = 20):
 
     return _query({
         "sl": word,
-        "max": max_results
+        "max": limit,
+        "md": "psrf"
     })
 
 
-# ----------------------------------------------------------
-# Spelled Like
-# ----------------------------------------------------------
+# ==========================================================
+# SPELLED LIKE
+# ==========================================================
 
-def get_spelled_like(word, max_results=20):
+def spelled_like(word: str, limit: int = 20):
 
     return _query({
         "sp": word,
-        "max": max_results
+        "max": limit,
+        "md": "psrf"
     })
 
 
-# ----------------------------------------------------------
-# Trigger Words
-# ----------------------------------------------------------
+# ==========================================================
+# RHYMES
+# ==========================================================
 
-def get_triggers(word, max_results=20):
+def rhymes(word: str, limit: int = 20):
+
+    return _query({
+        "rel_rhy": word,
+        "max": limit,
+        "md": "psrf"
+    })
+
+
+# ==========================================================
+# HOMOPHONES
+# ==========================================================
+
+def homophones(word: str):
+
+    return _query({
+        "rel_hom": word,
+        "md": "psrf"
+    })
+
+
+# ==========================================================
+# TRIGGERS
+# ==========================================================
+
+def related(word: str, limit: int = 20):
 
     return _query({
         "rel_trg": word,
-        "max": max_results
+        "max": limit,
+        "md": "psrf"
     })
 
 
-# ----------------------------------------------------------
-# Frequently Follows
-# ----------------------------------------------------------
+# ==========================================================
+# HYPERNYMS
+# ==========================================================
 
-def get_after(word, max_results=20):
+def kind_of(word: str):
 
     return _query({
-        "rel_bga": word,
-        "max": max_results
+        "rel_spc": word,
+        "md": "psrf"
     })
 
 
-# ----------------------------------------------------------
-# Frequently Precedes
-# ----------------------------------------------------------
+# ==========================================================
+# HYPONYMS
+# ==========================================================
 
-def get_before(word, max_results=20):
+def more_specific(word: str):
 
     return _query({
-        "rel_bgb": word,
-        "max": max_results
+        "rel_gen": word,
+        "md": "psrf"
     })
 
 
-# ----------------------------------------------------------
-# Adjectives describing a noun
-# ----------------------------------------------------------
+# ==========================================================
+# MERONYMS
+# ==========================================================
 
-def get_adjectives(word, max_results=20):
+def part_of(word: str):
+
+    return _query({
+        "rel_par": word,
+        "md": "psrf"
+    })
+
+
+# ==========================================================
+# HOLONYMS
+# ==========================================================
+
+def comprises(word: str):
+
+    return _query({
+        "rel_com": word,
+        "md": "psrf"
+    })
+
+
+# ==========================================================
+# ADJECTIVES FOR NOUN
+# ==========================================================
+
+def describing(word: str):
 
     return _query({
         "rel_jjb": word,
-        "max": max_results
+        "md": "psrf"
     })
 
 
-# ----------------------------------------------------------
-# Nouns described by adjective
-# ----------------------------------------------------------
+# ==========================================================
+# NOUNS DESCRIBED BY ADJECTIVE
+# ==========================================================
 
-def get_nouns(word, max_results=20):
+def described_by(word: str):
 
     return _query({
         "rel_jja": word,
-        "max": max_results
+        "md": "psrf"
     })
 
 
-# ----------------------------------------------------------
-# Extract words only
-# ----------------------------------------------------------
+# ==========================================================
+# FOLLOWING WORDS
+# ==========================================================
+
+def follows(word: str):
+
+    return _query({
+        "rel_bga": word,
+        "md": "psrf"
+    })
+
+
+# ==========================================================
+# PRECEDING WORDS
+# ==========================================================
+
+def precedes(word: str):
+
+    return _query({
+        "rel_bgb": word,
+        "md": "psrf"
+    })
+
+
+# ==========================================================
+# LOOKUP WORD METADATA
+# ==========================================================
+
+def lookup(word: str):
+
+    results = _query({
+        "sp": word,
+        "qe": "sp",
+        "md": "dpsrf"
+    })
+
+    if results:
+        return results[0]
+
+    return {}
+
+
+# ==========================================================
+# SIMPLE LIST HELPER
+# ==========================================================
 
 def words_only(results):
+
+    return [
+        item["word"]
+        for item in results
+        if "word" in item
+    ]
+
+
+# ==========================================================
+# COMPLETE WORD PROFILE
+# ==========================================================
+
+def profile(word: str):
+
     """
-    Converts Datamuse results into
-    a simple list of words.
+    Returns a complete Datamuse profile for one word.
     """
-
-    return [item["word"] for item in results]
-
-
-# ----------------------------------------------------------
-# Complete Analysis
-# ----------------------------------------------------------
-
-def analyze(word):
 
     return {
 
-        "similar": words_only(get_similar(word)),
+        "metadata": lookup(word),
 
-        "synonyms": words_only(get_synonyms(word)),
+        "synonyms": words_only(synonyms(word)),
 
-        "antonyms": words_only(get_antonyms(word)),
+        "antonyms": words_only(antonyms(word)),
 
-        "rhymes": words_only(get_rhymes(word)),
+        "meaning": words_only(meaning(word)),
 
-        "near_rhymes": words_only(get_near_rhymes(word)),
+        "related": words_only(related(word)),
 
-        "sounds_like": words_only(get_sounds_like(word)),
+        "rhymes": words_only(rhymes(word)),
 
-        "spelled_like": words_only(get_spelled_like(word)),
+        "homophones": words_only(homophones(word)),
 
-        "triggers": words_only(get_triggers(word)),
+        "kind_of": words_only(kind_of(word)),
 
-        "before": words_only(get_before(word)),
+        "more_specific": words_only(more_specific(word)),
 
-        "after": words_only(get_after(word)),
+        "part_of": words_only(part_of(word)),
 
-        "adjectives": words_only(get_adjectives(word)),
+        "comprises": words_only(comprises(word)),
 
-        "nouns": words_only(get_nouns(word))
+        "describing": words_only(describing(word)),
 
+        "described_by": words_only(described_by(word)),
+
+        "follows": words_only(follows(word)),
+
+        "precedes": words_only(precedes(word)),
     }
 
 
-# ----------------------------------------------------------
-# Test
-# ----------------------------------------------------------
+# ==========================================================
+# TEST
+# ==========================================================
 
 if __name__ == "__main__":
 
-    result = analyze("language")
+    word = "ocean"
 
-    print(result)
+    data = profile(word)
+
+    from pprint import pprint
+
+    pprint(data)
