@@ -1,14 +1,14 @@
+import json
 import streamlit as st
 
 from services.spacy_service import (
     analyze_text,
     get_tokens,
-    get_summary
+    get_summary,
 )
 
-from services.dictionary import (
-    summarize
-)
+from services.dictionary import summarize
+
 
 # ==========================================================
 # PAGE CONFIG
@@ -17,7 +17,7 @@ from services.dictionary import (
 st.set_page_config(
     page_title="Word Explorer",
     page_icon="🔎",
-    layout="wide"
+    layout="wide",
 )
 
 # ==========================================================
@@ -27,8 +27,13 @@ st.set_page_config(
 st.title("🔎 Word Explorer")
 
 st.write(
-    "Explore the meaning, structure, history and linguistic properties "
-    "of any word or phrase."
+    "Explore the meaning, structure, pronunciation, grammar and linguistic "
+    "properties of any word or phrase."
+)
+
+st.caption(
+    "Examples: *understanding*, *photosynthesis*, *run*, "
+    "*artificial intelligence*, *to be or not to be*"
 )
 
 st.divider()
@@ -39,12 +44,12 @@ st.divider()
 
 search = st.text_input(
     "Enter a word or phrase",
-    placeholder="Example: understanding"
+    placeholder="Example: understanding",
 )
 
 analyze = st.button(
     "Analyze",
-    use_container_width=True
+    use_container_width=True,
 )
 
 # ==========================================================
@@ -54,23 +59,33 @@ analyze = st.button(
 if analyze:
 
     if not search.strip():
-
         st.warning("Please enter a word or phrase.")
         st.stop()
 
-    # --------------------------------------
-    # Analyse
-    # --------------------------------------
+    with st.spinner("Analyzing language..."):
 
-    doc = analyze_text(search)
+        doc = analyze_text(search)
 
-    tokens = get_tokens(doc)
+        tokens = get_tokens(doc)
 
-    summary = get_summary(search)
+        summary = get_summary(search)
 
-    dictionary = summarize(search)
+        try:
+            dictionary = summarize(search)
+        except Exception:
+            dictionary = None
 
-    st.success(f'Analyzing "{search}"')
+    st.success(f'Analysis completed for **"{search}"**')
+
+    # ------------------------------------------------------
+
+    m1, m2, m3 = st.columns(3)
+
+    m1.metric("Tokens", summary["tokens"])
+    m2.metric("Sentences", summary["sentences"])
+    m3.metric("Named Entities", summary["entities"])
+
+    st.divider()
 
     col1, col2 = st.columns(2)
 
@@ -80,41 +95,39 @@ if analyze:
 
     with col1:
 
-        with st.container(border=True):
+        with st.expander("📖 Definitions", expanded=True):
 
-            st.subheader("📖 Definitions")
+            if dictionary and dictionary.get("definitions"):
 
-            if dictionary:
-
-                for i, definition in enumerate(dictionary["definitions"], start=1):
+                for i, definition in enumerate(
+                    dictionary["definitions"], start=1
+                ):
 
                     st.markdown(
-                        f"**{i}. ({definition['part_of_speech']})** "
-                        f"{definition['definition']}"
+                        f"""
+**{i}. {definition["part_of_speech"]}**
+
+{definition["definition"]}
+"""
                     )
 
             else:
+                st.info("No definitions available.")
 
-                st.info("No dictionary definition found.")
-
-        with st.container(border=True):
-
-            st.subheader("🧩 Morphology")
+        with st.expander("🧩 Morphology", expanded=True):
 
             for token in tokens:
 
                 st.markdown(
                     f"""
-**{token['text']}**
+### {token["text"]}
 
-- Lemma: `{token['lemma']}`
-- Morphology: `{token['morphology']}`
+- **Lemma:** `{token["lemma"]}`
+- **Morphology:** `{token["morphology"]}`
 """
                 )
 
-        with st.container(border=True):
-
-            st.subheader("🏷 Part of Speech")
+        with st.expander("🏷 Parts of Speech"):
 
             for token in tokens:
 
@@ -122,28 +135,22 @@ if analyze:
                     f"**{token['text']}** → {token['pos']}"
                 )
 
-        with st.container(border=True):
+        with st.expander("🔄 Synonyms"):
 
-            st.subheader("🔄 Synonyms")
-
-            if dictionary and dictionary["synonyms"]:
+            if dictionary and dictionary.get("synonyms"):
 
                 st.write(", ".join(dictionary["synonyms"]))
 
             else:
-
                 st.info("No synonyms available.")
 
-        with st.container(border=True):
+        with st.expander("⛔ Antonyms"):
 
-            st.subheader("⛔ Antonyms")
-
-            if dictionary and dictionary["antonyms"]:
+            if dictionary and dictionary.get("antonyms"):
 
                 st.write(", ".join(dictionary["antonyms"]))
 
             else:
-
                 st.info("No antonyms available.")
 
     # ======================================================
@@ -152,86 +159,76 @@ if analyze:
 
     with col2:
 
-        with st.container(border=True):
-
-            st.subheader("🔊 Pronunciation")
+        with st.expander("🔊 Pronunciation", expanded=True):
 
             if dictionary:
 
-                if dictionary["ipa"]:
+                ipa = dictionary.get("ipa")
 
-                    st.write(f"**IPA:** {dictionary['ipa']}")
+                audio = dictionary.get("audio")
 
-                if dictionary["audio"]:
+                if ipa:
+                    st.write(f"### IPA\n`{ipa}`")
 
-                    st.audio(dictionary["audio"])
+                if audio:
+                    st.audio(audio)
+
+                if not ipa and not audio:
+                    st.info("No pronunciation available.")
 
             else:
-
                 st.info("No pronunciation available.")
 
-        with st.container(border=True):
+        with st.expander("📚 Example Sentences", expanded=True):
 
-            st.subheader("📚 Example Sentences")
+            found = False
 
             if dictionary:
 
-                found = False
+                for definition in dictionary.get("definitions", []):
 
-                for definition in dictionary["definitions"]:
+                    example = definition.get("example")
 
-                    if definition["example"]:
+                    if example:
 
                         found = True
 
-                        st.markdown(
-                            f"> {definition['example']}"
-                        )
+                        st.markdown(f"> {example}")
 
-                if not found:
+            if not found:
+                st.info("No example sentences available.")
 
-                    st.info("No example sentences available.")
-
-            else:
-
-                st.info("No examples available.")
-
-        with st.container(border=True):
-
-            st.subheader("📊 Word Statistics")
-
-            c1, c2, c3 = st.columns(3)
-
-            c1.metric(
-                "Tokens",
-                summary["tokens"]
-            )
-
-            c2.metric(
-                "Sentences",
-                summary["sentences"]
-            )
-
-            c3.metric(
-                "Entities",
-                summary["entities"]
-            )
-
-        with st.container(border=True):
-
-            st.subheader("🔍 Token Details")
+        with st.expander("🔍 Token Details"):
 
             st.dataframe(
                 tokens,
                 use_container_width=True,
-                hide_index=True
+                hide_index=True,
             )
 
-        with st.container(border=True):
+        with st.expander("🌍 Etymology"):
 
-            st.subheader("🌍 Etymology")
+            st.info(
+                "Etymology integration will connect to "
+                "Etymonline, Wiktionary and AI-generated historical analysis."
+            )
 
-            st.info("Coming in the next version.")
+        with st.expander("⬇ Export"):
+
+            export = {
+                "query": search,
+                "summary": summary,
+                "dictionary": dictionary,
+                "tokens": tokens,
+            }
+
+            st.download_button(
+                "Download Analysis (JSON)",
+                json.dumps(export, indent=4),
+                file_name=f"{search}.json",
+                mime="application/json",
+                use_container_width=True,
+            )
 
 # ==========================================================
 # EMPTY STATE
@@ -240,7 +237,7 @@ if analyze:
 else:
 
     st.info(
-        "👆 Enter a word or phrase above and click Analyze."
+        "👆 Enter a word or phrase above and click **Analyze**."
     )
 
 # ==========================================================
@@ -249,9 +246,7 @@ else:
 
 with st.sidebar:
 
-    st.header("Explorer")
-
-    st.write("Current Features")
+    st.header("🔎 Word Explorer")
 
     st.success("✔ Definitions")
     st.success("✔ Morphology")
@@ -260,13 +255,17 @@ with st.sidebar:
     st.success("✔ Antonyms")
     st.success("✔ IPA Pronunciation")
     st.success("✔ Example Sentences")
+    st.success("✔ JSON Export")
 
     st.divider()
 
-    st.write("Coming Soon")
+    st.subheader("Coming Soon")
 
-    st.checkbox("Etymology", value=False, disabled=True)
+    st.checkbox("AI Etymology", value=False, disabled=True)
     st.checkbox("Word Family", value=False, disabled=True)
+    st.checkbox("Cognates", value=False, disabled=True)
     st.checkbox("Semantic Graph", value=False, disabled=True)
     st.checkbox("Syntax Tree", value=False, disabled=True)
+    st.checkbox("Language Detection", value=False, disabled=True)
+    st.checkbox("Translation", value=False, disabled=True)
     st.checkbox("AI Tutor", value=False, disabled=True)
