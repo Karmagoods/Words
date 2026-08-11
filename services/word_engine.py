@@ -257,6 +257,12 @@ class WordEngine:
                                 []
                             ),
 
+                        "related": data.get("related", []),
+
+                        "rhymes": data.get("rhymes", []),
+
+                        "sounds_like": data.get("sounds_like", []),
+
 
                         "ipa":
 
@@ -290,7 +296,7 @@ class WordEngine:
         # ==================================================
 
 
-        if datamuse_lookup:
+        if datamuse_lookup and not result["related"]:
 
 
             try:
@@ -603,6 +609,16 @@ class WordEngine:
                 pattern
 
         }
+
+    def get_game_words(self, category="general", pattern="*", limit=30):
+        """Return clean game words with a local fallback."""
+        if game_words:
+            try:
+                return game_words(pattern=pattern, category=category, limit=limit)
+            except Exception:
+                pass
+        from games.base_game import FALLBACK_WORDS
+        return FALLBACK_WORDS.get(category, FALLBACK_WORDS["general"])
 # ==========================================================
 # TEST
 # ==========================================================

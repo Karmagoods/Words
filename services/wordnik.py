@@ -14,7 +14,7 @@ import streamlit as st
 def summarize(word: str) -> dict[str, Any] | None:
     """Return no data until a key-backed Wordnik client is configured."""
     _ = word
-    if not st.secrets.get("WORDNIK_API_KEY"):
+    if not st.secrets.get("WORDNIK_API_KEY", None):
         return None
     # A key is present, but no Wordnik client has been configured yet.
     # Returning None keeps Wordnik optional without masking import failures.

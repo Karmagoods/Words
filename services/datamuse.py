@@ -37,7 +37,7 @@ import streamlit as st
 
 BASE_URL = "https://api.datamuse.com"
 
-TIMEOUT = 15
+TIMEOUT = 6
 
 
 # ==========================================================
@@ -420,10 +420,7 @@ def words_only(results):
 # GAME WORD GENERATOR
 # ==========================================================
 
-def game_words(
-        pattern="*",
-        limit=50
-):
+def game_words(pattern="*", category="general", limit=50):
 
     """
     Used for:
@@ -437,16 +434,15 @@ def game_words(
     game_words("c????")
     """
 
-    return words_only(
-
-        _query({
-
-            "sp": pattern,
-            "max": limit
-
-        })
-
-    )
+    if pattern != "*":
+        candidates = words_only(_query({"sp": pattern, "max": limit}))
+    else:
+        categories = {
+            "animal": "animal", "science": "science", "nature": "nature",
+            "technology": "technology", "food": "food", "general": "language",
+        }
+        candidates = words_only(_query({"ml": categories.get(category, "language"), "max": limit, "md": "p"}))
+    return [word.lower() for word in candidates if word.replace(" ", "").isalpha() and 3 <= len(word) <= 14]
 
 
 
@@ -455,174 +451,18 @@ def game_words(
 # ==========================================================
 
 def profile(word: str):
-
+    """Compact profile used by the explorer (one request per displayed relation)."""
     return {
-
-
-        "metadata":
-            lookup(word),
-
-
-        "synonyms":
-            words_only(
-                synonyms(word)
-            ),
-
-
-        "antonyms":
-            words_only(
-                antonyms(word)
-            ),
-
-
-        "meaning":
-            words_only(
-                meaning(word)
-            ),
-
-
-        "related":
-            words_only(
-                related(word)
-            ),
-
-
-        "rhymes":
-            words_only(
-                rhymes(word)
-            ),
-
-
-        "homophones":
-            words_only(
-                homophones(word)
-            ),
-
-
-        "kind_of":
-            words_only(
-                kind_of(word)
-            ),
-
-
-        "more_specific":
-            words_only(
-                more_specific(word)
-            ),
-
-
-        "part_of":
-            words_only(
-                part_of(word)
-            ),
-
-
-        "comprises":
-            words_only(
-                comprises(word)
-            ),
-
-
-        "describing":
-            words_only(
-                describing(word)
-            ),
-
-
-        "described_by":
-            words_only(
-                described_by(word)
-            ),
-
-
-        "follows":
-            words_only(
-                follows(word)
-            ),
-
-
-        "precedes":
-            words_only(
-                precedes(word)
-            )
-
+        "metadata": lookup(word),
+        "synonyms": words_only(synonyms(word)),
+        "antonyms": words_only(antonyms(word)),
+        "meaning": words_only(meaning(word)),
+        "related": words_only(related(word)),
+        "rhymes": words_only(rhymes(word)),
+        "homophones": words_only(homophones(word)),
+        "kind_of": [], "more_specific": [], "part_of": [], "comprises": [],
+        "describing": [], "described_by": [], "follows": [], "precedes": [],
     }
 
 
 
-# ==========================================================
-# TEST
-# ==========================================================
-
-if __name__ == "__main__":
-
-    from pprint import pprint
-
-
-    pprint(
-        profile("elephant")
-    )
-
-
-    print("\nGAME WORDS")
-
-    pprint(
-        game_words("c????")
-    )
-    # ==========================================================
-# GAME WORDS
-# ==========================================================
-
-def game_words(
-    pattern="*",
-    category="general",
-    limit=20
-):
-    """
-    Returns words suitable for games.
-
-    Used by:
-    - Hangman
-    - Word Search
-    - Crossword
-
-    Categories:
-    animal
-    science
-    nature
-    general
-    """
-
-    categories = {
-
-        "animal": "animal",
-
-        "science": "science",
-
-        "nature": "nature",
-
-        "technology": "technology",
-
-        "general": "language"
-
-    }
-
-
-    search_term = categories.get(
-        category,
-        "language"
-    )
-
-
-    results = _query({
-
-        "ml": search_term,
-
-        "max": limit,
-
-        "md": "ps"
-
-    })
-
-
-    return words_only(results)

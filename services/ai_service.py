@@ -34,7 +34,7 @@ from groq import Groq
 
 AI_PROVIDER = st.secrets.get("AI_PROVIDER", "groq")
 
-GROQ_API_KEY = st.secrets.get("GROQ_API_KEY")
+GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", None)
 
 GROQ_MODEL = st.secrets.get(
     "GROQ_MODEL",
@@ -114,6 +114,8 @@ def ask_ai(
     max_tokens: int = 1000,
 ):
 
+    if not GROQ_API_KEY:
+        return None
     provider = AI_PROVIDER.lower()
 
     if provider == "groq":

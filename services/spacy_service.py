@@ -28,7 +28,11 @@ def load_model():
     """
     Load the spaCy English language model.
     """
-    return spacy.load("en_core_web_sm")
+    try:
+        return spacy.load("en_core_web_sm")
+    except OSError:
+        # Tokenisation still works when the optional statistical model is absent.
+        return spacy.blank("en")
 
 
 nlp = load_model()
@@ -104,8 +108,10 @@ def get_entities(doc):
 # ----------------------------------------------------------
 
 def get_sentences(doc):
-
-    return [sent.text for sent in doc.sents]
+    try:
+        return [sent.text for sent in doc.sents]
+    except ValueError:
+        return [doc.text] if doc.text else []
 
 
 # ----------------------------------------------------------
@@ -187,7 +193,7 @@ def get_summary(text: str):
 
         "text": text,
         "tokens": len(doc),
-        "sentences": len(list(doc.sents)),
+        "sentences": len(get_sentences(doc)),
         "entities": len(doc.ents),
         "words": [token.text for token in doc]
 
