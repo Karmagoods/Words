@@ -74,8 +74,14 @@ def summarize(word: str) -> dict[str, Any]:
 
     wordnik = wordnik_summary(word)
     if wordnik:
+        # Wordnik fills gaps rather than overriding a source that already answered.
+        if not result["definitions"]:
+            result["definitions"] = wordnik.get("definitions", [])
         result["examples"] = _merge_lists(result["examples"], wordnik.get("examples"))
+        result["synonyms"] = _merge_lists(result["synonyms"], wordnik.get("synonyms"))
+        result["antonyms"] = _merge_lists(result["antonyms"], wordnik.get("antonyms"))
         result["ipa"] = result["ipa"] or wordnik.get("ipa")
+        result["audio"] = result["audio"] or wordnik.get("audio")
 
     etymology = analyze_etymology(word)
     result["etymology"] = etymology.get("history") or etymology.get("summary")
