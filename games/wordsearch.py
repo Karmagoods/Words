@@ -1,39 +1,24 @@
-from __future__ import annotations
-import random
-from games.base_game import normalise_words
+import streamlit as st
+from games.base_game import choose_words
+from games.wordsearch import make_grid, find_word
+from utils.session import get, put, record_win
 
-DIRECTIONS = ((0, 1), (1, 0), (1, 1), (1, -1))
-
-
-def make_grid(words, size=10, seed=None):
-    rng = random.Random(seed)
-    words = sorted(normalise_words(words), key=len, reverse=True)
-    grid = [["" for _ in range(size)] for _ in range(size)]
-    placed = {}
-    for word in words:
-        options = []
-        for _ in range(100):
-            dr, dc = rng.choice(DIRECTIONS); row, col = rng.randrange(size), rng.randrange(size)
-            end_r, end_c = row + dr * (len(word) - 1), col + dc * (len(word) - 1)
-            if not (0 <= end_r < size and 0 <= end_c < size): continue
-            if all(not grid[row + dr*i][col + dc*i] or grid[row + dr*i][col + dc*i] == char for i, char in enumerate(word)):
-                options.append((row, col, dr, dc)); break
-        if not options: continue
-        row, col, dr, dc = options[0]
-        for i, char in enumerate(word): grid[row + dr*i][col + dc*i] = char.upper()
-        placed[word] = (row, col, row + dr*(len(word)-1), col + dc*(len(word)-1))
-    for row in grid:
-        for index, char in enumerate(row):
-            if not char: row[index] = rng.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-    return grid, placed
-
-
-def find_word(grid, word, start_row, start_col, end_row, end_col):
-    word = word.upper(); size = len(grid)
-    if not word or not all(0 <= v < size for v in (start_row, start_col, end_row, end_col)): return False
-    length = max(abs(end_row-start_row), abs(end_col-start_col)) + 1
-    if length != len(word): return False
-    dr = 0 if end_row == start_row else (1 if end_row > start_row else -1)
-    dc = 0 if end_col == start_col else (1 if end_col > start_col else -1)
-    if dr and dc and abs(end_row-start_row) != abs(end_col-start_col): return False
-    return "".join(grid[start_row+dr*i][start_col+dc*i] for i in range(length)) in (word, word[::-1])
+st.set_page_config(page_title="Word Search | Words", page_icon="🔎", layout="centered")
+st.title("🔎 Word Search")
+if st.button("New puzzle", use_container_width=True) or not get("wordsearch"):
+    words = choose_words(count=6, minimum=4, maximum=10, random_category=True)
+    grid, positions = make_grid(words, 10)
+    put("wordsearch", {"words": list(positions), "grid": grid, "found": set()})
+puzzle = get("wordsearch")
+st.caption("Enter the coordinates for the first and last letter. Rows and columns start at 1.")
+st.code("\n".join(" ".join(row) for row in puzzle["grid"]), language=None)
+st.write("Find: " + ", ".join(f"~~{word}~~" if word in puzzle["found"] else word for word in puzzle["words"]))
+c1, c2, c3, c4 = st.columns(4)
+row1 = c1.number_input("Start row", 1, 10, 1); col1 = c2.number_input("Start column", 1, 10, 1)
+row2 = c3.number_input("End row", 1, 10, 1); col2 = c4.number_input("End column", 1, 10, 1)
+if st.button("Check selection", use_container_width=True):
+    matched = next((word for word in puzzle["words"] if word not in puzzle["found"] and find_word(puzzle["grid"], word, row1-1, col1-1, row2-1, col2-1)), None)
+    if matched:
+        puzzle["found"].add(matched); put("wordsearch", puzzle); st.success(f"Found **{matched}**!")
+        if len(puzzle["found"]) == len(puzzle["words"]): record_win(50); st.balloons()
+    else: st.warning("That selection does not match a remaining word.")
