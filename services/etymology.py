@@ -7,9 +7,13 @@ Provides etymological information for the Words app.
 
 Primary source: Wordnik
 Fallback: Wiktionary
+Reference source: Online Etymology Dictionary
 
 The service is designed so that a missing API key or a
 failed lookup does not break the application.
+
+Etymonline is used as a reference link rather than scraped,
+so the app does not depend on an unofficial scraping API.
 ==========================================================
 """
 
@@ -29,6 +33,31 @@ from services.wordnik import get_etymologies, get_related_words
 # ---------------------------------------------------------
 
 WIKTIONARY_API = "https://en.wiktionary.org/w/api.php"
+WIKTIONARY_BASE_URL = "https://en.wiktionary.org/wiki/"
+
+
+# ---------------------------------------------------------
+# ETYMONLINE
+# ---------------------------------------------------------
+
+ETYMONLINE_BASE_URL = "https://www.etymonline.com/word/"
+
+
+def _etymonline_url(word: str) -> str:
+    """
+    Build a direct Online Etymology Dictionary URL.
+
+    Etymonline normally uses the word itself in the URL.
+    """
+    clean_word = word.strip().lower()
+
+    return (
+        ETYMONLINE_BASE_URL
+        + requests.utils.quote(
+            clean_word,
+            safe="",
+        )
+    )
 
 
 # ---------------------------------------------------------
@@ -134,6 +163,7 @@ def empty_result(word: str) -> dict[str, Any]:
         "summary": None,
         "source": None,
         "source_url": None,
+        "etymonline_url": _etymonline_url(word) if word else None,
     }
 
 
@@ -294,7 +324,11 @@ def analyze(word: str) -> dict[str, Any]:
 
         1. Wordnik
         2. Wiktionary
-        3. No data
+        3. Etymonline reference link
+        4. No data
+
+    Etymonline is always supplied as an external reference
+    link when a word has been entered.
     """
 
     clean_word = word.strip()
@@ -315,17 +349,22 @@ def analyze(word: str) -> dict[str, Any]:
         etymologies = []
 
     if etymologies:
-
         history = " ".join(etymologies)
 
         result["history"] = history
         result["summary"] = etymologies[0]
         result["source"] = "Wordnik"
+        result["source_url"] = (
+            "https://www.wordnik.com/words/"
+            + requests.utils.quote(
+                clean_word,
+                safe="",
+            )
+        )
 
         languages = _detect_languages(history)
 
         if languages:
-
             result["language"] = languages[0].title()
 
             result["family"] = LANGUAGE_FAMILIES.get(
@@ -338,7 +377,6 @@ def analyze(word: str) -> dict[str, Any]:
             )
 
         else:
-
             result["timeline"] = [
                 {
                     "period": "Modern",
@@ -361,7 +399,6 @@ def analyze(word: str) -> dict[str, Any]:
     raw = lookup_wiktionary(clean_word)
 
     if raw is not None:
-
         result["summary"] = (
             "No structured etymology was found "
             "from Wordnik. A Wiktionary entry exists "
@@ -371,18 +408,21 @@ def analyze(word: str) -> dict[str, Any]:
         result["source"] = "Wiktionary"
 
         result["source_url"] = (
-            "https://en.wiktionary.org/wiki/"
+            WIKTIONARY_BASE_URL
             + requests.utils.quote(
                 clean_word,
                 safe="",
             )
         )
 
-    else:
+    # -----------------------------------------------------
+    # 3. NO API DATA
+    # -----------------------------------------------------
 
+    else:
         result["summary"] = (
-            "No etymology data is available for "
-            "this word right now."
+            "No etymology data is available from "
+            "the connected sources right now."
         )
 
     result["timeline"] = [
@@ -408,6 +448,7 @@ if __name__ == "__main__":
     print("SOURCE:", result["source"])
     print("LANGUAGE:", result["language"])
     print("FAMILY:", result["family"])
+    print("ETYMONLINE:", result["etymonline_url"])
     print()
     print("SUMMARY:")
     print(result["summary"])
