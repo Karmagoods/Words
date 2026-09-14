@@ -1,12 +1,15 @@
+
 """
 ==========================================================
 Etymology Service
 ----------------------------------------------------------
 Provides etymological information for the Words app.
 
-Primary source: Wordnik (needs WORDNIK_API_KEY in secrets.toml).
-Fallback: a lightweight note (no key configured / nothing found),
-so the page never breaks, it just says less.
+Primary source: Wordnik
+Fallback: Wiktionary
+
+The service is designed so that a missing API key or a
+failed lookup does not break the application.
 ==========================================================
 """
 
@@ -20,44 +23,105 @@ import streamlit as st
 
 from services.wordnik import get_etymologies, get_related_words
 
+
+# ---------------------------------------------------------
+# WIKTIONARY
+# ---------------------------------------------------------
+
 WIKTIONARY_API = "https://en.wiktionary.org/w/api.php"
 
-# Rough language -> family map, matched against Wordnik's etymology text.
+
+# ---------------------------------------------------------
+# LANGUAGE -> FAMILY MAP
+# ---------------------------------------------------------
+
 LANGUAGE_FAMILIES = {
+    # Germanic
     "old english": "Germanic",
     "middle english": "Germanic",
     "proto-germanic": "Germanic",
     "old frisian": "Germanic",
     "old norse": "Germanic",
     "gothic": "Germanic",
+    "old high german": "Germanic",
+    "middle high german": "Germanic",
     "german": "Germanic",
     "dutch": "Germanic",
     "english": "Germanic",
+
+    # Italic / Romance
     "vulgar latin": "Italic",
-    "old french": "Romance",
-    "french": "Romance",
     "latin": "Italic",
+    "old french": "Romance",
+    "middle french": "Romance",
+    "french": "Romance",
     "spanish": "Romance",
     "italian": "Romance",
     "portuguese": "Romance",
     "romanian": "Romance",
+
+    # Hellenic
     "ancient greek": "Hellenic",
+    "old greek": "Hellenic",
     "greek": "Hellenic",
+
+    # Indo-Aryan
     "sanskrit": "Indo-Aryan",
     "hindi": "Indo-Aryan",
+    "bengali": "Indo-Aryan",
+    "urdu": "Indo-Aryan",
+
+    # Celtic
+    "old irish": "Celtic",
+    "irish": "Celtic",
+    "welsh": "Celtic",
+    "gaelic": "Celtic",
+
+    # Slavic
+    "old church slavonic": "Slavic",
+    "church slavonic": "Slavic",
+    "russian": "Slavic",
+    "polish": "Slavic",
+    "czech": "Slavic",
+
+    # Semitic
     "arabic": "Semitic",
     "hebrew": "Semitic",
-    "proto-indo-european": "Indo-European (root)",
+    "aramaic": "Semitic",
+
+    # Turkic / Iranian
+    "turkish": "Turkic",
+    "persian": "Indo-Iranian",
+    "old persian": "Indo-Iranian",
+
+    # Proto-languages
+    "proto-indo-european": "Indo-European",
+    "proto-indo-iranian": "Indo-Iranian",
 }
 
-# Longest names first so "old english" matches before bare "english".
+
+# Longest names first.
 _LANGUAGE_PATTERN = re.compile(
-    r"\b(" + "|".join(sorted(LANGUAGE_FAMILIES, key=len, reverse=True)) + r")\b",
+    r"\b("
+    + "|".join(
+        sorted(
+            LANGUAGE_FAMILIES,
+            key=len,
+            reverse=True,
+        )
+    )
+    + r")\b",
     re.IGNORECASE,
 )
 
 
+# ---------------------------------------------------------
+# RESULT STRUCTURE
+# ---------------------------------------------------------
+
 def empty_result(word: str) -> dict[str, Any]:
+    """Return a consistent result structure."""
+
     return {
         "word": word,
         "origin": None,
@@ -68,84 +132,282 @@ def empty_result(word: str) -> dict[str, Any]:
         "cognates": [],
         "related_words": [],
         "summary": None,
+        "source": None,
+        "source_url": None,
     }
 
 
+# ---------------------------------------------------------
+# LANGUAGE DETECTION
+# ---------------------------------------------------------
+
 def _detect_languages(text: str) -> list[str]:
-    """Distinct language names mentioned in *text*, oldest-first as written."""
+    """
+    Find distinct language names mentioned in etymology text.
+
+    Languages are returned in the order they appear.
+    """
+
     seen: list[str] = []
+
     for match in _LANGUAGE_PATTERN.finditer(text):
         name = match.group(1).lower()
+
         if name not in seen:
             seen.append(name)
+
     return seen
 
 
-def _build_timeline(languages: list[str], word: str) -> list[dict[str, str]]:
-    timeline = [
-        {"period": language.title(), "language": language.title(), "word": None}
-        for language in languages
-    ]
-    timeline.append({"period": "Modern", "language": "English", "word": word})
+# ---------------------------------------------------------
+# TIMELINE
+# ---------------------------------------------------------
+
+def _build_timeline(
+    languages: list[str],
+    word: str,
+) -> list[dict[str, str | None]]:
+    """Build a simple historical language timeline."""
+
+    timeline: list[dict[str, str | None]] = []
+
+    for language in languages:
+        timeline.append(
+            {
+                "period": language.title(),
+                "language": language.title(),
+                "word": None,
+            }
+        )
+
+    timeline.append(
+        {
+            "period": "Modern",
+            "language": "English",
+            "word": word,
+        }
+    )
+
     return timeline
 
 
-@st.cache_data(show_spinner=False)
-def lookup_wiktionary(word: str):
-    """Check whether a Wiktionary page exists, as a last-resort fallback."""
-    params = {"action": "parse", "page": word, "prop": "text", "format": "json"}
+# ---------------------------------------------------------
+# WIKTIONARY LOOKUP
+# ---------------------------------------------------------
+
+@st.cache_data(show_spinner=False, ttl=86400)
+def lookup_wiktionary(
+    word: str,
+) -> dict[str, Any] | None:
+    """
+    Check whether a Wiktionary page exists.
+
+    This is currently a fallback indicator rather than a
+    complete Wiktionary etymology parser.
+    """
+
+    params = {
+        "action": "parse",
+        "page": word,
+        "prop": "text",
+        "format": "json",
+    }
+
+    headers = {
+        "User-Agent": "KLH-Words/1.0",
+    }
+
     try:
-        response = requests.get(WIKTIONARY_API, params=params, timeout=15)
+        response = requests.get(
+            WIKTIONARY_API,
+            params=params,
+            headers=headers,
+            timeout=15,
+        )
+
         if response.status_code != 200:
             return None
-        return response.json()
-    except Exception:
+
+        data = response.json()
+
+        if "error" in data:
+            return None
+
+        return data
+
+    except (
+        requests.RequestException,
+        ValueError,
+    ):
         return None
 
 
-def analyze(word: str) -> dict[str, Any]:
-    """Main entry point — the only function the UI should call.
+# ---------------------------------------------------------
+# WORDNIK RELATED WORDS
+# ---------------------------------------------------------
 
-    Prefers real Wordnik etymology data. Falls back to a short,
-    honest note if no key is configured or nothing is found.
+def _add_related_words(
+    result: dict[str, Any],
+    word: str,
+) -> None:
     """
-    result = empty_result(word)
+    Add Wordnik related terms.
 
-    etymologies = get_etymologies(word)
+    Failure here never breaks the etymology result.
+    """
+
+    try:
+        related = get_related_words(word)
+
+        if not related:
+            return
+
+        cognates = related.get(
+            "etymologically-related-term",
+            [],
+        )
+
+        variants = related.get(
+            "variant",
+            [],
+        )
+
+        result["cognates"] = cognates
+
+        result["related_words"] = (
+            cognates or variants
+        )
+
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------
+# MAIN ANALYSIS
+# ---------------------------------------------------------
+
+def analyze(word: str) -> dict[str, Any]:
+    """
+    Main entry point for the etymology UI.
+
+    Source priority:
+
+        1. Wordnik
+        2. Wiktionary
+        3. No data
+    """
+
+    clean_word = word.strip()
+
+    result = empty_result(clean_word)
+
+    if not clean_word:
+        result["summary"] = "Please enter a word."
+        return result
+
+    # -----------------------------------------------------
+    # 1. WORDNIK
+    # -----------------------------------------------------
+
+    try:
+        etymologies = get_etymologies(clean_word)
+    except Exception:
+        etymologies = []
 
     if etymologies:
+
         history = " ".join(etymologies)
+
         result["history"] = history
         result["summary"] = etymologies[0]
+        result["source"] = "Wordnik"
 
         languages = _detect_languages(history)
-        if languages:
-            result["language"] = languages[0].title()
-            result["family"] = LANGUAGE_FAMILIES.get(languages[0])
-            result["timeline"] = _build_timeline(languages, word)
-        else:
-            result["timeline"] = [{"period": "Modern", "language": "English", "word": word}]
 
-        related = get_related_words(word)
-        cognates = related.get("etymologically-related-term", [])
-        result["cognates"] = cognates
-        result["related_words"] = cognates or related.get("variant", [])
+        if languages:
+
+            result["language"] = languages[0].title()
+
+            result["family"] = LANGUAGE_FAMILIES.get(
+                languages[0]
+            )
+
+            result["timeline"] = _build_timeline(
+                languages,
+                clean_word,
+            )
+
+        else:
+
+            result["timeline"] = [
+                {
+                    "period": "Modern",
+                    "language": "English",
+                    "word": clean_word,
+                }
+            ]
+
+        _add_related_words(
+            result,
+            clean_word,
+        )
 
         return result
 
-    # No Wordnik key configured, or nothing found for this specific word.
-    raw = lookup_wiktionary(word)
-    if raw is not None:
-        result["summary"] = (
-            "No structured etymology was found for this word from Wordnik. "
-            "A Wiktionary page exists for it if you want to check manually."
-        )
-    else:
-        result["summary"] = "No etymology data is available for this word right now."
+    # -----------------------------------------------------
+    # 2. WIKTIONARY FALLBACK
+    # -----------------------------------------------------
 
-    result["timeline"] = [{"period": "Modern", "language": "English", "word": word}]
+    raw = lookup_wiktionary(clean_word)
+
+    if raw is not None:
+
+        result["summary"] = (
+            "No structured etymology was found "
+            "from Wordnik. A Wiktionary entry exists "
+            "for this word and can be checked manually."
+        )
+
+        result["source"] = "Wiktionary"
+
+        result["source_url"] = (
+            "https://en.wiktionary.org/wiki/"
+            + requests.utils.quote(
+                clean_word,
+                safe="",
+            )
+        )
+
+    else:
+
+        result["summary"] = (
+            "No etymology data is available for "
+            "this word right now."
+        )
+
+    result["timeline"] = [
+        {
+            "period": "Modern",
+            "language": "English",
+            "word": clean_word,
+        }
+    ]
+
     return result
 
 
+# ---------------------------------------------------------
+# LOCAL TEST
+# ---------------------------------------------------------
+
 if __name__ == "__main__":
-    print(analyze("language"))
+
+    result = analyze("language")
+
+    print("WORD:", result["word"])
+    print("SOURCE:", result["source"])
+    print("LANGUAGE:", result["language"])
+    print("FAMILY:", result["family"])
+    print()
+    print("SUMMARY:")
+    print(result["summary"])
